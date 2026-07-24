@@ -57,6 +57,12 @@ function buildIndex() {
   const postingCount = db.prepare('SELECT COUNT(*) as c FROM postings').get().c;
   console.log(`Index built: ${termCount} unique terms, ${postingCount} postings.`);
   console.log(`Run "node server.js" to start the search UI.`);
+  return { termCount, postingCount };
 }
 
-buildIndex();
+module.exports = { buildIndex };
+
+// Still works as a standalone CLI script: `node indexer.js`
+if (require.main === module) {
+  buildIndex();
+}
