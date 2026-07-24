@@ -30,6 +30,19 @@ npm start
 ```
 Then open http://localhost:3000
 
+## Running the crawl on Render's free tier (no Shell access)
+Render's free plan doesn't include Shell access. Instead, Vexkly exposes a protected admin
+endpoint to trigger the crawl remotely:
+
+1. Set an `ADMIN_KEY` environment variable on Render — any secret string you choose, e.g. `ADMIN_KEY=letMeC0ntrol`
+2. Visit in your browser: `https://your-app.onrender.com/admin/crawl?key=YOUR_ADMIN_KEY`
+   - This starts the crawl + indexing in the background and responds immediately
+3. Check progress at: `https://your-app.onrender.com/admin/status?key=YOUR_ADMIN_KEY`
+   - Shows `running: true` while in progress, then `lastResult` with page/term counts when done
+4. Once `running` is `false` and `lastResult` is populated, go back to the main site and search
+
+Keep your `ADMIN_KEY` secret — anyone with it can trigger a crawl on your site.
+
 ## Growing the crawl
 Edit `SEED_URLS`, `MAX_PAGES`, and `MAX_DEPTH` in `crawler.js`. Start small (a few hundred pages)
 to confirm everything works end-to-end, then scale up gradually. Re-run `node indexer.js` any
