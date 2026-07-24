@@ -10,9 +10,13 @@ const path = require('path');
 const db = require('./db');
 const { search } = require('./search');
 const { verifyGoogleToken, upsertUser, attachUser } = require('./auth');
+const { crawl } = require('./crawler');
+const { buildIndex } = require('./indexer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+let crawlStatus = { running: false, lastResult: null, lastError: null };
 
 app.use(express.json());
 app.use(session({
@@ -78,6 +82,49 @@ app.get('/stats', (req, res) => {
   res.json({ pagesIndexed: pages, uniqueTerms: terms });
 });
 
+// --- Admin: trigger crawl + index without needing Shell access (useful on free Render tier) ---
+// Visit: https://your-app.onrender.com/admin/crawl?key=YOUR_ADMIN_KEY
+// Set ADMIN_KEY as an environment variable on Render — pick your own secret string.
+function requireAdminKey(req, res, next) {
+  const key = req.query.key;
+  if (!process.env.ADMIN_KEY) {
+    return res.status(500).json({ error: 'ADMIN_KEY is not set on the server' });
+  }
+  if (key !== process.env.ADMIN_KEY) {
+    return res.status(403).json({ error: 'Invalid or missing admin key' });
+  }
+  next();
+}
+
+app.get('/admin/crawl', requireAdminKey, (req, res) => {
+  if (crawlStatus.running) {
+    return res.json({ started: false, message: 'A crawl is already running.', status: crawlStatus });
+  }
+
+  crawlStatus = { running: true, lastResult: null, lastError: null };
+  res.json({ started: true, message: 'Crawl started in the background. Check /admin/status for progress.' });
+
+  // Run crawl then indexing in the background; response has already been sent.
+  crawl()
+    .then((pagesSaved) => {
+      const indexResult = buildIndex();
+      crawlStatus = {
+        running: false,
+        lastResult: { pagesSaved, ...indexResult, finishedAt: new Date().toISOString() },
+        lastError: null
+      };
+    })
+    .catch((err) => {
+      crawlStatus = { running: false, lastResult: null, lastError: err.message };
+    });
+});
+
+app.get('/admin/status', requireAdminKey, (req, res) => {
+  res.json(crawlStatus);
+});
+
 app.listen(PORT, () => {
   console.log(`Vexkly running at http://localhost:${PORT}`);
 });
+
+  
