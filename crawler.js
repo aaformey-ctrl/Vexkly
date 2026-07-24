@@ -177,9 +177,15 @@ async function crawl() {
 
   console.log(`\nCrawl finished. Pages saved: ${pagesSaved}`);
   console.log(`Run "node indexer.js" next to build the search index.`);
+  return pagesSaved;
 }
 
-crawl().catch(err => {
-  console.error('Crawl error:', err);
-  process.exit(1);
-});
+module.exports = { crawl };
+
+// Still works as a standalone CLI script: `node crawler.js`
+if (require.main === module) {
+  crawl().catch(err => {
+    console.error('Crawl error:', err);
+    process.exit(1);
+  });
+}
