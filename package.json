@@ -1,0 +1,16 @@
+{
+  "name": "vexkly",
+  "version": "1.0.0",
+  "description": "Vexkly - a self-contained web search engine: crawler + inverted index + BM25 ranking + Express UI",
+  "main": "server.js",
+  "scripts": {
+    "crawl": "node crawler.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.4",
+    "cheerio": "^1.0.0",
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2"
+  }
+}
