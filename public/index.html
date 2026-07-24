@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vexkly</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    margin: 0;
+    background: #fff;
+    color: #202124;
+  }
+  .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
+  .logo { font-size: 32px; font-weight: 600; text-align: center; margin: 40px 0 24px; color: #1a73e8; }
+  .search-box {
+    display: flex;
+    align-items: center;
+    border: 1px solid #dfe1e5;
+    border-radius: 24px;
+    padding: 10px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .search-box input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 16px;
+  }
+  .search-box button {
+    border: none;
+    background: #1a73e8;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .meta { color: #70757a; font-size: 13px; margin: 16px 0; }
+  .result { margin-bottom: 22px; }
+  .result a {
+    color: #1a0dab;
+    text-decoration: none;
+    font-size: 18px;
+  }
+  .result a:hover { text-decoration: underline; }
+  .result .url { color: #006621; font-size: 13px; margin-bottom: 2px; }
+  .result .snippet { color: #4d5156; font-size: 14px; line-height: 1.4; margin-top: 2px; }
+  .empty { text-align: center; color: #70757a; margin-top: 40px; }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 12px 0; }
+  .user-chip { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #202124; }
+  .user-chip img { width: 28px; height: 28px; border-radius: 50%; }
+  .signout-btn {
+    border: 1px solid #dfe1e5; background: #fff; border-radius: 14px;
+    padding: 4px 12px; font-size: 13px; cursor: pointer; color: #444;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar" id="topbar">
+      <div id="g_id_signin"></div>
+    </div>
+    <div class="logo">🔎 Vexkly</div>
+    <div class="search-box">
+      <input id="q" type="text" placeholder="Search the index..." autofocus />
+      <button onclick="doSearch()">Search</button>
+    </div>
+    <div id="meta" class="meta"></div>
+    <div id="results"></div>
+  </div>
+
+<script>
+  const input = document.getElementById('q');
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  async function doSearch() {
+    const q = input.value.trim();
+    const resultsEl = document.getElementById('results');
+    const metaEl = document.getElementById('meta');
+    if (!q) return;
+
+    metaEl.textContent = 'Searching...';
+    resultsEl.innerHTML = '';
+
+    const res = await fetch('/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+
+    metaEl.textContent = data.count + ' results (' + data.timeMs + ' ms)';
+
+    if (data.results.length === 0) {
+      resultsEl.innerHTML = '<div class="empty">No results found. Try crawling more pages or a different query.</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = data.results.map(r => `
+      <div class="result">
+        <div class="url">${r.url}</div>
+        <a href="${r.url}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>
+        <div class="snippet">${escapeHtml(r.snippet)}</div>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  // ---- Google Sign-In ----
+  const topbar = document.getElementById('topbar');
+  let GOOGLE_CLIENT_ID = null;
+
+  function renderSignedIn(user) {
+    topbar.innerHTML = `
+      <div class="user-chip">
+        <img src="${user.picture}" alt="">
+        <span>${escapeHtml(user.name)}</span>
+      </div>
+      <button class="signout-btn" onclick="signOut()">Sign out</button>
+    `;
+  }
+
+  function renderSignedOut() {
+    topbar.innerHTML = `<div id="g_id_signin"></div>`;
+    initGoogleButton();
+  }
+
+  function initGoogleButton() {
+    if (!window.google || !GOOGLE_CLIENT_ID) return; // GSI script or client ID not ready yet
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('g_id_signin'),
+      { theme: 'outline', size: 'medium', shape: 'pill' }
+    );
+  }
+
+  async function handleGoogleCredential(response) {
+    try {
+      const res = await fetch('/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: response.credential })
+      });
+      if (!res.ok) throw new Error('Sign-in failed');
+      const user = await res.json();
+      renderSignedIn(user);
+    } catch (err) {
+      console.error(err);
+      alert('Sign-in failed. Please try again.');
+    }
+  }
+
+  async function signOut() {
+    await fetch('/auth/logout', { method: 'POST' });
+    renderSignedOut();
+  }
+
+  async function checkSession() {
+    const res = await fetch('/auth/me');
+    const data = await res.json();
+    if (data.loggedIn) renderSignedIn(data);
+    else renderSignedOut();
+  }
+
+  window.addEventListener('load', async () => {
+    try {
+      const res = await fetch('/config');
+      const config = await res.json();
+      GOOGLE_CLIENT_ID = config.googleClientId;
+    } catch (err) {
+      console.error('Failed to load config:', err);
+    }
+    // Give the Google script a moment to load before initializing
+    setTimeout(checkSession, 300);
+  });
+</script>
+</body>
+</html>
